@@ -190,10 +190,7 @@ fn apply(options: &INTERNET_PER_CONN_OPTION_LISTW) -> Result<()> {
     }
 }
 
-fn apply_connect(
-    options: &INTERNET_PER_CONN_OPTION_LISTW,
-    conn: PWSTR,
-) -> std::result::Result<(), SystemCallFailed> {
+fn apply_connect(options: &INTERNET_PER_CONN_OPTION_LISTW, conn: PWSTR) -> Result<()> {
     let opts = &mut options.clone();
     opts.pszConnection = conn;
     unsafe {
@@ -213,6 +210,39 @@ fn apply_connect(
     Ok(())
 }
 
+/// set global proxy with registry
+fn set_global_proxy_with_registry(server: String, bypass: String) -> Result<()> {
+    let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
+    let cur_var = hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_SET_VALUE)?;
+
+    cur_var.set_value("ProxyEnable", &1u32)?;
+    cur_var.set_value("ProxyServer", &server)?;
+    cur_var.set_value("ProxyOverride", &bypass)?;
+
+    // flush settings
+    unsafe {
+        InternetSetOptionW(None, INTERNET_OPTION_PROXY_SETTINGS_CHANGED, None, 0)?;
+        InternetSetOptionW(None, INTERNET_OPTION_REFRESH, None, 0)?;
+    }
+
+    Ok(())
+}
+
+/// unset proxy with registry
+fn unset_proxy_with_registry() -> Result<()> {
+    let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
+    let cur_var = hkcu.open_subkey_with_flags(SUB_KEY, enums::KEY_SET_VALUE)?;
+
+    cur_var.set_value("ProxyEnable", &0u32)?;
+
+    // flush settings
+    unsafe {
+        InternetSetOptionW(None, INTERNET_OPTION_PROXY_SETTINGS_CHANGED, None, 0)?;
+        InternetSetOptionW(None, INTERNET_OPTION_REFRESH, None, 0)?;
+    }
+
+    Ok(())
+}
 /// get_system_proxy_with_registry is intended to get system proxy from registry.
 fn get_system_proxy_with_registry() -> Result<Sysproxy> {
     let hkcu = RegKey::predef(enums::HKEY_CURRENT_USER);
@@ -251,6 +281,16 @@ impl Sysproxy {
         match self.enable {
             true => set_global_proxy(format!("{}:{}", self.host, self.port), self.bypass.clone()),
             false => unset_proxy(),
+        }
+    }
+
+    pub fn set_system_proxy_with_registry(&self) -> Result<()> {
+        match self.enable {
+            true => set_global_proxy_with_registry(
+                format!("{}:{}", self.host, self.port),
+                self.bypass.clone(),
+            ),
+            false => unset_proxy_with_registry(),
         }
     }
 }

@@ -31,7 +31,11 @@ pub enum Error {
 
     #[cfg(target_os = "windows")]
     #[error("system call failed")]
-    SystemCallFailed(#[from] windows::SystemCallFailed),
+    SystemCall(#[from] windows::SystemCallFailed),
+
+    #[cfg(target_os = "windows")]
+    #[error("system call failed")]
+    Win32(#[from] windows::Win32Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
